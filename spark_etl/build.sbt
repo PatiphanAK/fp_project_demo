@@ -17,7 +17,8 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-sql"  % Versions.spark % Provided,
 
   // Application dependencies - included in JAR
-  "org.typelevel"      %% "cats-effect" % Versions.catsEffect,
+  "org.typelevel" %% "cats-effect" % Versions.catsEffect,
+  "org.typelevel" %% "cats-core" % "2.13.0"
   "io.github.cdimascio" % "dotenv-java" % Versions.dotenv,
   "com.google.api-client" % "google-api-client" % "2.8.1",
   "com.google.apis" % "google-api-services-drive" % "v3-rev197-1.25.0",

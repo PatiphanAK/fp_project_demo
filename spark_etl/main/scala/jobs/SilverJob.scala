@@ -1,5 +1,6 @@
 package jobs
 
+Import cats.syntax.parallel._
 import org.apache.spark.sql.{SparkSession, DataFrame, functions => F}
 import org.apache.spark.sql.expressions.Window
 import cats.effect.IO
@@ -46,10 +47,13 @@ object SilverJob {
     "checkins_normalized" -> checkins25km
   )
 
-  private def filterRunners25km(spark: SparkSession, runners: DataFrame, routes: DataFrame): IO[DataFrame] = IO {
+  private def filterRunnersByRoute(
+    spark: SparkSession,
+    runners: DataFrame,
+    routes: DataFrame,
+    routeName: String
+  ): IO[DataFrame] = IO {
     import spark.implicits._
-
-    // บังคับ bibNumber เป็น String ตั้งแต่ต้นน้ำ
     runners
       .withColumn("bibNumber", $"bibNumber".cast("string"))
       .join(
@@ -57,7 +61,7 @@ object SilverJob {
         $"route" === $"route_id",
         "left"
       )
-      .filter($"route_name" === Route25KM.name)
+      .filter($"route_name" === routeName)
       .select(
         $"id".alias("runner_id"),
         $"bibNumber",
