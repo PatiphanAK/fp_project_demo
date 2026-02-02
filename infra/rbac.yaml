@@ -1,3 +1,6 @@
+# ========================================================
+# 1. Spark Driver / Executor (สิทธิ์สำหรับตัวแอป Spark เอง)
+# ========================================================
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -7,17 +10,17 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: spark-role
+  name: spark-driver-role
   namespace: argo
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "events"]
+    resources: ["pods", "services", "configmaps", "events", "secrets"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: spark-role-binding
+  name: spark-driver-rolebinding
   namespace: argo
 subjects:
   - kind: ServiceAccount
@@ -25,5 +28,67 @@ subjects:
     namespace: argo
 roleRef:
   kind: Role
-  name: spark-role
+  name: spark-driver-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ========================================================
+# 2. Argo Workflow -> Manager (สิทธิ์ให้ Argo สั่งงาน Spark)
+# ========================================================
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-spark-manager-role
+  namespace: argo
+rules:
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["create", "get", "list", "watch", "patch", "delete"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "get", "list", "watch", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-spark-manager-binding
+  namespace: argo
+subjects:
+  - kind: ServiceAccount
+    name: argo
+    namespace: argo
+roleRef:
+  kind: Role
+  name: argo-spark-manager-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ========================================================
+# 3. Spark Operator Access (สิทธิ์ให้ Operator เข้ามาคุม Namespace argo)
+# ========================================================
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-operator-cross-ns-role
+  namespace: argo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "secrets", "events"]
+    verbs: ["*"]
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications", "sparkapplications/status"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-operator-cross-ns-binding
+  namespace: argo
+subjects:
+  - kind: ServiceAccount
+    name: sparkops-spark-operator
+    namespace: sparkops
+roleRef:
+  kind: Role
+  name: spark-operator-cross-ns-role
   apiGroup: rbac.authorization.k8s.io
