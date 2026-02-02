@@ -1,0 +1,106 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: race-medallion-parallel-
+  namespace: argo
+spec:
+  entrypoint: medallion-dag
+  serviceAccountName: argo
+
+  # Global parameters (Optional: ถ้าอยากกำหนดค่า Default)
+  arguments:
+    parameters:
+      - name: routes
+        value: |
+          [
+            {"name": "10km", "value": "10KM"},
+            {"name": "25km", "value": "25KM"}
+          ]
+
+  templates:
+    - name: medallion-dag
+      dag:
+        tasks:
+          - name: bronze-step
+            template: spark-app-template
+            arguments:
+              parameters:
+                [
+                  { name: step, value: bronze },
+                  { name: route, value: "{{item}}" },
+                ]
+            withItems: ["10km", "25km"]
+
+          - name: silver-step
+            dependencies: [bronze-step]
+            template: spark-app-template
+            arguments:
+              parameters:
+                [
+                  { name: step, value: silver },
+                  { name: route, value: "{{item}}" },
+                ]
+            withItems: ["10km", "25km"]
+
+          - name: gold-step
+            dependencies: [silver-step]
+            template: spark-app-template
+            arguments:
+              parameters:
+                [
+                  { name: step, value: gold },
+                  { name: route, value: "{{item}}" },
+                ]
+            withItems: ["10km", "25km"]
+
+    - name: spark-app-template
+      inputs:
+        parameters: [{ name: step }, { name: route }]
+      resource:
+        action: create
+        successCondition: status.applicationState.state in (COMPLETED, SUCCEEDED)
+        failureCondition: status.applicationState.state == FAILED
+        setOwnerReference: false # หรือ true ถ้าอยากให้ลบ Workflow แล้วลบ Pod ด้วย
+        manifest: |
+          apiVersion: sparkoperator.k8s.io/v1beta2
+          kind: SparkApplication
+          metadata:
+            name: "race-{{inputs.parameters.step}}-{{inputs.parameters.route}}-{{workflow.name}}"
+            namespace: spark-apps
+            labels:
+              workflow: "{{workflow.name}}"
+              step: "{{inputs.parameters.step}}"
+              route: "{{inputs.parameters.route}}"
+          spec:
+            type: Scala
+            mode: cluster
+            image: "tatar025/demo_fp:1.0.3"
+            imagePullPolicy: Always
+            mainClass: "main.Main"
+            mainApplicationFile: "local:///opt/spark/etl/app.jar"
+            arguments:
+              - "{{inputs.parameters.step}}"
+              - "{{inputs.parameters.route}}"
+
+            sparkVersion: "4.0.1"
+            restartPolicy:
+              type: Never
+            driver:
+              cores: 1
+              memory: "1g"
+              serviceAccount: spark-operator-sa
+              labels:
+                version: "4.0.1"
+            executor:
+              cores: 1
+              instances: 2
+              memory: "2g"
+              labels:
+                version: "4.0.1"
+            hadoopConf:
+              "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+              "fs.s3a.endpoint": "s3.ap-southeast-1.amazonaws.com"
+              "fs.s3a.path.style.access": "true"
+              "fs.s3a.aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+              "fs.s3a.access.key": ""
+              "fs.s3a.secret.key": ""

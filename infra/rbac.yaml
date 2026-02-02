@@ -1,93 +1,98 @@
-# ========================================================
-# 1. Spark Driver / Executor (สิทธิ์สำหรับตัวแอป Spark เอง)
-# ========================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${WORKLOAD_NS}
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: spark-operator-sa
-  namespace: argo
+  namespace: ${WORKLOAD_NS}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: spark-driver-role
-  namespace: argo
+  namespace: ${WORKLOAD_NS}
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "events", "secrets"]
-    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+    resources:
+      [
+        "pods",
+        "services",
+        "configmaps",
+        "events",
+        "secrets",
+        "persistentvolumeclaims",
+      ]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: spark-driver-rolebinding
-  namespace: argo
+  namespace: ${WORKLOAD_NS}
 subjects:
   - kind: ServiceAccount
     name: spark-operator-sa
-    namespace: argo
+    namespace: ${WORKLOAD_NS}
 roleRef:
   kind: Role
   name: spark-driver-role
   apiGroup: rbac.authorization.k8s.io
-
-# ========================================================
-# 2. Argo Workflow -> Manager (สิทธิ์ให้ Argo สั่งงาน Spark)
-# ========================================================
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: argo-spark-manager-role
-  namespace: argo
+  name: spark-operator-cross-ns-role
+  namespace: ${WORKLOAD_NS}
 rules:
+  - apiGroups: [""]
+    resources:
+      [
+        "pods",
+        "services",
+        "configmaps",
+        "secrets",
+        "events",
+        "persistentvolumeclaims",
+      ]
+    verbs: ["*"]
   - apiGroups: ["sparkoperator.k8s.io"]
-    resources: ["sparkapplications"]
-    verbs: ["create", "get", "list", "watch", "patch", "delete"]
-  - apiGroups: ["argoproj.io"]
-    resources: ["workflowtaskresults"]
-    verbs: ["create", "get", "list", "watch", "patch", "delete"]
+    resources:
+      [
+        "sparkapplications",
+        "sparkapplications/status",
+        "sparkapplications/finalizers",
+      ]
+    verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: argo-spark-manager-binding
-  namespace: argo
+  name: argo-manager-binding
+  namespace: ${WORKLOAD_NS}
 subjects:
   - kind: ServiceAccount
     name: argo
     namespace: argo
 roleRef:
   kind: Role
-  name: argo-spark-manager-role
-  apiGroup: rbac.authorization.k8s.io
-
-# ========================================================
-# 3. Spark Operator Access (สิทธิ์ให้ Operator เข้ามาคุม Namespace argo)
-# ========================================================
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
   name: spark-operator-cross-ns-role
-  namespace: argo
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "secrets", "events"]
-    verbs: ["*"]
-  - apiGroups: ["sparkoperator.k8s.io"]
-    resources: ["sparkapplications", "sparkapplications/status"]
-    verbs: ["*"]
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: spark-operator-cross-ns-binding
-  namespace: argo
+  name: spark-operator-binding
+  namespace: ${WORKLOAD_NS}
 subjects:
   - kind: ServiceAccount
-    name: sparkops-spark-operator
-    namespace: sparkops
+    name: ${RELEASE_NAME}-spark-operator
+    namespace: ${OPERATOR_NS}
 roleRef:
   kind: Role
   name: spark-operator-cross-ns-role

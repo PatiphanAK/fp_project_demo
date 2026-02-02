@@ -5,35 +5,78 @@ import cats.effect.IO
 
 object GoldJob {
 
+  /**
+   * Main entry point with route filtering
+   * @param routeFilter: "10KM", "25KM", or "ALL"
+   */
   def run(
     spark: SparkSession,
-    silverTables: Map[String, DataFrame]
+    silverTables: Map[String, DataFrame],
+    routeFilter: String = "ALL"
   ): IO[Unit] = for {
-    _ <- IO.println("\n🏆 Gold Layer: Formatting Final JSON Output...")
+    _ <- IO.println(s"\n🏆 Gold Layer: Processing route=$routeFilter...")
 
-    // ดึง checkins ที่ผ่านการ Merge และ Deduplicate มาแล้วจาก Silver
-    checkinsNormalized = silverTables("checkins_normalized")
+    // Read from Silver S3 output (or use in-memory if available)
+    checkins <- routeFilter.toUpperCase match {
+      case "10KM" | "25KM" =>
+        readSilverData(spark, routeFilter)
+      case "ALL" =>
+        // Process both routes
+        for {
+          _ <- processRoute(spark, "10KM")
+          _ <- processRoute(spark, "25KM")
+        } yield ()
+    }
 
-    _ <- IO.println("  Aggregating by BIB & Formatting Timestamps...")
-    finalDf <- aggregateByBib(spark, checkinsNormalized)
-
-    _ <- IO.println("  Writing final output to JSON...")
-    _ <- writeGoldJSON(finalDf)
-
-    _ <- IO.println("✅ Gold Complete\n")
+    _ <- IO.println(s"✅ Gold complete for route=$routeFilter\n")
   } yield ()
 
+  /**
+   * Process single route
+   */
+  private def processRoute(spark: SparkSession, route: String): IO[Unit] = for {
+    _ <- IO.println(s"  📊 Processing $route...")
+
+    // Read Silver data
+    silverPath = s"s3a://tatar-race-data/silver/${route.toLowerCase}"
+    checkins <- IO(spark.read.parquet(s"$silverPath/checkins"))
+
+    // Aggregate by BIB
+    finalDf <- aggregateByBib(spark, checkins)
+
+    // Write Gold output
+    outputPath = s"s3a://tatar-race-data/gold/${route.toLowerCase}"
+    _ <- IO {
+      finalDf.coalesce(1)
+        .write
+        .mode("overwrite")
+        .json(outputPath)
+    }
+
+    count <- IO(finalDf.count())
+    _ <- IO.println(s"    ✓ $route: $count runners processed")
+
+  } yield ()
+
+  /**
+   * Read Silver data from S3
+   */
+  private def readSilverData(spark: SparkSession, route: String): IO[DataFrame] = IO {
+    val silverPath = s"s3a://tatar-race-data/silver/${route.toLowerCase}/checkins"
+    spark.read.parquet(silverPath)
+  }
+
+  /**
+   * Aggregate checkins by BIB
+   */
   private def aggregateByBib(spark: SparkSession, merged: DataFrame): IO[DataFrame] = IO {
     import spark.implicits._
 
     merged
-      // กรองเฉพาะที่มีเวลาสแกน (เผื่อกรณี Runner ที่ยังไม่ได้วิ่ง)
       .filter($"scannedAt".isNotNull)
-      // แปลงจาก UTC (Silver) เป็น Bangkok (Local) และทำ ISO format
       .withColumn("checkpointAt",
         F.date_format(F.from_utc_timestamp($"scannedAt", "Asia/Bangkok"), "yyyy-MM-dd'T'HH:mm:ssXXX")
       )
-      // เรียงลำดับเพื่อให้ checkpoints ใน List เรียงตามความจริง
       .orderBy($"bibNumber", $"sequenceOrder")
       .groupBy($"bibNumber".alias("bib"))
       .agg(
@@ -44,16 +87,5 @@ object GoldJob {
           )
         ).alias("checkpoints")
       )
-  }
-
-  private def writeGoldJSON(df: DataFrame): IO[Unit] = IO {
-    val outputPath = "s3a://tatar-race-data/gold/final_checkins_25km"
-
-    df.coalesce(1)
-      .write
-      .mode("overwrite")
-      .json(outputPath)
-
-    println(s"✅ Gold Data written to Private S3: $outputPath")
   }
 }

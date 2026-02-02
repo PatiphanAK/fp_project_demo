@@ -10,7 +10,6 @@ import domain.{Route10KM, Route25KM}
 
 object SilverJob {
 
-  // Algebraic Data Types for Checkpoint Mapping
   sealed trait CheckpointMapping
   case class CorrectRoute(
     checkpointId: String,
@@ -33,8 +32,16 @@ object SilverJob {
     bibNumber: String
   ) extends CheckpointMapping
 
-  def run(spark: SparkSession, bronzeTables: Map[String, DataFrame]): IO[Map[String, DataFrame]] = for {
-    _ <- IO.println("\n📷 Silver Layer: Auto-Correcting Cross-Route Scans...")
+  /**
+   * Main entry point with route filtering
+   * @param routeFilter: "10KM", "25KM", or "ALL"
+   */
+  def run(
+    spark: SparkSession,
+    bronzeTables: Map[String, DataFrame],
+    routeFilter: String = "ALL"
+  ): IO[Map[String, DataFrame]] = for {
+    _ <- IO.println(s"\n🔷 Silver Layer: Processing route=$routeFilter...")
 
     // 1. Extract bronze tables
     runners = bronzeTables("runners")
@@ -44,7 +51,7 @@ object SilverJob {
     excel10k = bronzeTables.get("excel_10k")
     excel25k = bronzeTables.get("excel_25k")
 
-    // 2. Build unified checkpoint map for ALL routes
+    // 2. Build unified checkpoint map
     allCheckpointsMap <- buildUnifiedCheckpointMap(spark, stages, routes)
 
     // 3. Process checkins with auto-correction
@@ -53,49 +60,55 @@ object SilverJob {
       spark, checkins, allRunners, allCheckpointsMap, excel10k, excel25k
     )
 
-    // 4. Split corrected checkins by route
-    checkins10km = correctedCheckins.filter(F.col("corrected_route") === "10KM")
-    checkins25km = correctedCheckins.filter(F.col("corrected_route") === "25KM")
-
-    // 5. Build runners and checkpoints per route
-    runners10km = allRunners.filter(F.col("route") === "10KM")
-    runners25km = allRunners.filter(F.col("route") === "25KM")
-    checkpoints10km = allCheckpointsMap.filter(F.col("checkpoint_route") === "10KM")
-    checkpoints25km = allCheckpointsMap.filter(F.col("checkpoint_route") === "25KM")
-
-    // 6. Cache
-    _ <- IO {
-      runners10km.cache()
-      runners25km.cache()
-      checkpoints10km.cache()
-      checkpoints25km.cache()
-      checkins10km.cache()
-      checkins25km.cache()
+    // 4. Filter by route if needed
+    filteredCheckins = routeFilter.toUpperCase match {
+      case "10KM" => correctedCheckins.filter(F.col("corrected_route") === "10KM")
+      case "25KM" => correctedCheckins.filter(F.col("corrected_route") === "25KM")
+      case _ => correctedCheckins
     }
 
-    r10Count <- IO(runners10km.count())
-    r25Count <- IO(runners25km.count())
-    ci10Count <- IO(checkins10km.count())
-    ci25Count <- IO(checkins25km.count())
-    correctedCount <- IO(correctedCheckins.filter(F.col("was_corrected") === true).count())
+    filteredRunners = routeFilter.toUpperCase match {
+      case "10KM" => allRunners.filter(F.col("route") === "10KM")
+      case "25KM" => allRunners.filter(F.col("route") === "25KM")
+      case _ => allRunners
+    }
 
-    _ <- IO.println(s"  ✓ 10KM: $r10Count runners, $ci10Count checkins")
-    _ <- IO.println(s"  ✓ 25KM: $r25Count runners, $ci25Count checkins")
-    _ <- IO.println(s"  ✅ Auto-corrected $correctedCount wrong-route scans\n")
+    filteredCheckpoints = routeFilter.toUpperCase match {
+      case "10KM" => allCheckpointsMap.filter(F.col("checkpoint_route") === "10KM")
+      case "25KM" => allCheckpointsMap.filter(F.col("checkpoint_route") === "25KM")
+      case _ => allCheckpointsMap
+    }
+
+    // 5. Cache
+    _ <- IO {
+      filteredRunners.cache()
+      filteredCheckpoints.cache()
+      filteredCheckins.cache()
+    }
+
+    runnerCount <- IO(filteredRunners.count())
+    checkinCount <- IO(filteredCheckins.count())
+
+    _ <- IO.println(s"  ✓ Route=$routeFilter: $runnerCount runners, $checkinCount checkins")
+
+    // 6. Write to S3 (partitioned by route)
+    outputPath = s"s3a://tatar-race-data/silver/${routeFilter.toLowerCase}"
+    _ <- IO.println(s"  💾 Writing to: $outputPath")
+
+    _ <- IO {
+      filteredRunners.write.mode("overwrite").parquet(s"$outputPath/runners")
+      filteredCheckpoints.write.mode("overwrite").parquet(s"$outputPath/checkpoints")
+      filteredCheckins.write.mode("overwrite").parquet(s"$outputPath/checkins")
+    }
+
+    _ <- IO.println(s"  ✅ Silver complete for route=$routeFilter\n")
 
   } yield Map(
-    "runners_10km" -> runners10km.select("runner_id", "bibNumber", "route"),
-    "checkpoints_10km" -> checkpoints10km.select("checkpoint_id", "checkpoint_route", "sequenceOrder", "checkpoint_name", "place_key"),
-    "checkins_normalized_10km" -> checkins10km.select("runner_id", "bibNumber", "checkpoint_id", "sequenceOrder", "place_key", "scannedAt", "corrected_route"),
-    "runners_25km" -> runners25km.select("runner_id", "bibNumber", "route"),
-    "checkpoints_25km" -> checkpoints25km.select("checkpoint_id", "checkpoint_route", "sequenceOrder", "checkpoint_name", "place_key"),
-    "checkins_normalized_25km" -> checkins25km.select("runner_id", "bibNumber", "checkpoint_id", "sequenceOrder", "place_key", "scannedAt", "corrected_route")
+    "runners" -> filteredRunners,
+    "checkpoints" -> filteredCheckpoints,
+    "checkins_normalized" -> filteredCheckins
   )
 
-  /**
-   * Build unified checkpoint map covering ALL routes
-   * Returns: checkpoint_id -> route mapping
-   */
   private def buildUnifiedCheckpointMap(
     spark: SparkSession,
     stages: DataFrame,
@@ -121,9 +134,6 @@ object SilverJob {
       )
   }
 
-  /**
-   * Build all runners with their registered routes
-   */
   private def buildAllRunners(
     spark: SparkSession,
     runners: DataFrame,
@@ -144,10 +154,6 @@ object SilverJob {
       )
   }
 
-  /**
-   * Process all checkins with automatic route correction
-   * If runner scanned wrong route's checkpoint, auto-correct to actual checkpoint's route
-   */
   private def processCheckinsWithAutoCorrection(
     spark: SparkSession,
     dbCheckins: DataFrame,
@@ -158,17 +164,13 @@ object SilverJob {
   ): IO[DataFrame] = IO {
     import spark.implicits._
 
-    // --- 1. Process DB Checkins with Auto-Correction ---
     val dbPart = dbCheckins
       .select($"runner".alias("runner_id"), $"checkpoint".alias("checkpoint_raw"), $"scannedAt")
       .withColumn("scannedAt", F.to_timestamp($"scannedAt", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
-      // Join with runners to get registered route
       .join(allRunners.as("r"), Seq("runner_id"), "inner")
-      // Join with ALL checkpoints to find actual checkpoint route
       .join(allCheckpoints.as("cp"), $"checkpoint_raw" === $"cp.checkpoint_id", "left")
-      // AUTO-CORRECTION LOGIC: Use checkpoint's actual route, not runner's registered route
       .withColumn("corrected_route",
-        F.coalesce($"cp.checkpoint_route", $"r.route") // fallback to runner route if checkpoint not found
+        F.coalesce($"cp.checkpoint_route", $"r.route")
       )
       .withColumn("was_corrected",
         F.when($"cp.checkpoint_route".isNotNull && $"cp.checkpoint_route" =!= $"r.route", true)
@@ -190,27 +192,23 @@ object SilverJob {
         $"cp.sequenceOrder",
         $"cp.place_key",
         $"scannedAt",
-        $"corrected_route", // ใช้ route ที่แก้ไขแล้ว
+        $"corrected_route",
         $"was_corrected",
         $"correction_note",
         F.lit(0).alias("_prio")
       )
 
-    // --- 2. Process Excel Data (10KM) ---
     val excel10kPart = excel10kOpt.map { excelData =>
       processExcelCheckins(spark, excelData, allRunners, allCheckpoints, "10KM", 1)
     }
 
-    // --- 3. Process Excel Data (25KM) ---
     val excel25kPart = excel25kOpt.map { excelData =>
       processExcelCheckins(spark, excelData, allRunners, allCheckpoints, "25KM", 2)
     }
 
-    // --- 4. Union all sources ---
     val allParts = List(Some(dbPart), excel10kPart, excel25kPart).flatten
     val merged = allParts.reduce(_.unionByName(_))
 
-    // --- 5. Deduplicate (higher prio wins) ---
     val windowSpec = Window.partitionBy("runner_id", "checkpoint_id").orderBy(F.col("_prio").desc)
 
     val deduped = merged
@@ -218,7 +216,6 @@ object SilverJob {
       .filter($"rn" === 1)
       .drop("rn", "_prio")
 
-    // --- 6. Log corrections ---
     val corrections = deduped.filter($"was_corrected" === true)
     val correctionCount = corrections.count()
 
@@ -228,22 +225,19 @@ object SilverJob {
         .show(false)
     }
 
-    // --- 7. Return with all runners (left join to preserve all) ---
-    deduped
-      .drop("was_corrected", "correction_note")
+    // Drop temp columns BEFORE final join
+    val cleanedDeduped = deduped.drop("was_corrected", "correction_note")
+
+    cleanedDeduped
       .join(
         allRunners.select("runner_id", "bibNumber", "route").as("all"),
         Seq("runner_id", "bibNumber"),
         "right"
       )
-      // Use corrected_route, fallback to registered route if no checkins
       .withColumn("corrected_route", F.coalesce($"corrected_route", $"route"))
       .orderBy($"bibNumber", $"sequenceOrder")
   }
 
-  /**
-   * Process Excel checkins for specific route
-   */
   private def processExcelCheckins(
     spark: SparkSession,
     excelData: DataFrame,
@@ -271,7 +265,6 @@ object SilverJob {
       )
       .withColumn("scannedAt", F.to_utc_timestamp($"scannedAt_local", "Asia/Bangkok"))
       .join(allRunners.as("r"), Seq("bibNumber"), "inner")
-      // Join with all checkpoints to get actual route
       .join(allCheckpoints.as("cp"), Seq("place_key"), "inner")
       .select(
         $"r.runner_id",
@@ -280,14 +273,13 @@ object SilverJob {
         $"cp.sequenceOrder",
         $"cp.place_key",
         $"scannedAt",
-        $"cp.checkpoint_route".alias("corrected_route"), // Excel already has correct mapping
+        $"cp.checkpoint_route".alias("corrected_route"),
+        F.lit(true).alias("was_corrected"),
+        F.lit("Excel Import").alias("correction_note"),
         F.lit(priority).alias("_prio")
       )
   }
 
-  /**
-   * Get tag to place mapping based on route
-   */
   private def getTagToPlaceMapping(routeName: String): org.apache.spark.sql.Column = {
     import org.apache.spark.sql.functions.typedLit
 

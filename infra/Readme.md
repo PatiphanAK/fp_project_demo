@@ -94,20 +94,23 @@ helm install my-spark-operator spark-operator/spark-operator \
 ##### กรณีให้ watch แค่ namespace เป้าหมาย
 
 ```bash
-helm install my-sparkops spark-operator/spark-operator \
-  --namespace spark-operator \
-  --create-namespace \
-  --set webhook.enable=true \
-  --set sparkJobNamespace=argo
+kubectl create ns spark-operator  # สำหรับตัวควบคุม (Controller)
+kubectl create ns spark-apps      # สำหรับรัน Spark Jobs
 ```
-
----
-
-### ตรวจสอบ namespace
 
 ```bash
-kubectl get ns
+helm install my-spark-operator spark-operator/spark-operator \
+  --namespace spark-operator \
+  --create-namespace \
+  --set 'spark.jobNamespaces={spark-apps}' \
+  --set webhook.enable=true
 ```
+
+> จุดเช็ก: รัน 
+```bash 
+kubectl get pods -n spark-operator
+```
+> ต้องเห็นสถานะ Running
 
 ### ลบ Spark Operator (กรณี reset ระบบ)
 
@@ -128,9 +131,9 @@ kubectl delete namespace <namespace>
 ### ตรวจสอบว่า Spark Operator กำลัง Watch อะไรอยู่
 
 ```bash
-kubectl describe pod -n <namespace> \
-  -l app.kubernetes.io/name=spark-operator | grep WATCH
+kubectl get pod -n spark-operator -l app.kubernetes.io/name=spark-operator -o yaml | grep -A 5 "args:"
 ```
+[Running Multiple Instances of the Spark Operator](https://www.kubeflow.org/docs/components/spark-operator/user-guide/running-multiple-instances-of-the-operator/)
 
 หรือดูจาก args ของ container:
 
@@ -328,3 +331,16 @@ kubectl auth can-i create services \
 ```
 
 ถ้าได้ `yes` แปลว่า RBAC ถูกต้อง
+
+### ปัญหาที่เจอบ่อย
+ชื่อใน rbac.yaml กับชื่อที่ Helm สร้างไม่ใช่้ชื่อเดียวกัน
+1. เช็คชื่อก่อนเลย
+```bash
+kubectl get sa -n spark-operator
+```
+2. แก้ให้ตรงกันใน YAML แล้ว apply ใหม่
+
+ล้าง spark-app
+```bash
+kubectl delete sparkapplication -n spark-apps --all
+```
