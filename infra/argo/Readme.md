@@ -65,3 +65,31 @@ kubectl delete workflows --all -n argo
 ```
 
 หากอยากศึกษาเพิ่มเพิ่ม [Argo Workflows - The workflow engine for Kubernetes](https://argo-workflows.readthedocs.io/en/latest/)
+
+## เมื่อ Workflow/Pipeline Failed เรา Debug ยังไง
+### ดูสถานะ Workflow / Job ก่อน (ภาพรวม)
+
+เริ่มจากดูว่า fail ที่ขั้นตอนไหน
+
+```bash
+kubectl get pods -n <namespace>
+kubectl workflow -n <namespace>
+```
+
+> จะช่วยให้รู้ว่า **pod ไหน fail** และเป็น step ไหนของ pipeline
+
+---
+
+### Inspect Pod ที่ล้มเหลว
+
+ดูรายละเอียดของ pod ที่มีสถานะ `Error`, `CrashLoopBackOff`, `Failed`
+
+```bash
+kubectl describe pod <pod_name>
+```
+
+สิ่งที่ควรดูเป็นพิเศษ:
+
+* `Events` (ล่างสุด)
+* `Reason` / `Exit Code`
+* `ImagePullBackOff`, `OOMKilled`, `Error`
