@@ -7,7 +7,7 @@ spec:
   entrypoint: medallion-dag
   serviceAccountName: argo
 
-  # Global parameters
+  # Global parameters (Optional: ถ้าอยากกำหนดค่า Default)
   arguments:
     parameters:
       - name: routes
@@ -60,7 +60,7 @@ spec:
         action: create
         successCondition: status.applicationState.state in (COMPLETED, SUCCEEDED)
         failureCondition: status.applicationState.state == FAILED
-        setOwnerReference: false
+        setOwnerReference: false # หรือ true ถ้าอยากให้ลบ Workflow แล้วลบ Pod ด้วย
         manifest: |
           apiVersion: sparkoperator.k8s.io/v1beta2
           kind: SparkApplication
@@ -85,45 +85,22 @@ spec:
             sparkVersion: "4.0.1"
             restartPolicy:
               type: Never
-
             driver:
               cores: 1
               memory: "1g"
               serviceAccount: spark-operator-sa
               labels:
                 version: "4.0.1"
-              env:
-                - name: AWS_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: aws-creds
-                      key: aws-access-key
-                - name: AWS_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: aws-creds
-                      key: aws-secret-key
-
             executor:
               cores: 1
               instances: 2
               memory: "2g"
               labels:
                 version: "4.0.1"
-              env:
-                - name: AWS_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: aws-creds
-                      key: aws-access-key
-                - name: AWS_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: aws-creds
-                      key: aws-secret-key
-
             hadoopConf:
               "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
               "fs.s3a.endpoint": "s3.ap-southeast-1.amazonaws.com"
-              "fs.s3a.path.style.access": "false"
-              "fs.s3a.aws.credentials.provider": "com.amazonaws.auth.EnvironmentVariableCredentialsProvider"
+              "fs.s3a.path.style.access": "true"
+              "fs.s3a.aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+              "fs.s3a.access.key": "Not Secure"
+              "fs.s3a.secret.key": "Note Secure"
