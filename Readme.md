@@ -1,5 +1,5 @@
 # 🐳 Docker
-![Docker](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Docker_%28container_engine%29_logo.svg/512px-Docker_%28container_engine%29_logo.svg.png)
+![Docker](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Docker_%28container_engine%29_logo.svg/960px-Docker_%28container_engine%29_logo.svg.png)
 
 Docker คือ **Platform สำหรับการพัฒนาและรันแอปพลิเคชันในรูปแบบ Container**  
 ซึ่งช่วยให้แอปสามารถทำงานได้เหมือนกันในทุกสภาพแวดล้อม  
