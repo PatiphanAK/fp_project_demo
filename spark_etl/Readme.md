@@ -630,6 +630,295 @@ object DataPipeline extends IOApp.Simple {
 - [Cats Effect Docs](https://typelevel.org/cats-effect/)
 - [Cats Effect Tutorial](https://typelevel.org/cats-effect/docs/tutorial)
 
+# Type-level Programming
+
+> Typeclass และ `implicit` — Polymorphism แบบ Functional Programming
+>
+> ⚙️ **Code ในไฟล์นี้ใช้ Scala 2.13** (ตามที่โปรเจกต์ใช้กับ Apache Spark)  
+> มีหมายเหตุ Scala 3 เปรียบเทียบไว้ในบาง Section
+
+---
+
+## ปัญหาที่ Type-level แก้
+
+สมมติต้องการฟังก์ชัน `sum` ที่รับได้ทั้ง `List[Int]`, `List[Double]`, และ Type อื่น ๆ:
+
+```scala
+// แบบ OOP ทั่วไป — Overload ทีละ Type
+def sum(xs: List[Int]): Int       = xs.reduce(_ + _)
+def sum(xs: List[Double]): Double = xs.reduce(_ + _)
+def sum(xs: List[Long]): Long     = xs.reduce(_ + _)
+// เพิ่ม Type ใหม่ทุกครั้ง = แก้ Code ทุกครั้ง
+// และทำไม่ได้เลยถ้า Class นั้นมาจาก Library คนอื่น
+```
+
+**Type-level ด้วย Typeclass** แก้ปัญหานี้โดยแยก **"ความสามารถ"** ออกจาก **"ข้อมูล"**
+
+```
+"ความสามารถ" (Typeclass)    "ข้อมูล" (Type)
+     Summable        +          Int
+     Summable        +          Double
+     Summable        +          BigDecimal   ← เพิ่มทีหลังได้โดยไม่แก้ sum
+```
+
+---
+
+## Typeclass คืออะไร?
+
+**Typeclass** คือ `trait` ที่บอกว่า Type ต้องมีความสามารถอะไร โดยไม่ต้องแก้ Class เดิม
+
+เปรียบเหมือน **ใบรับรอง** — ถ้า Type `A` มีใบรับรอง `Summable` → เอาไปใช้กับ `sum` ได้
+
+---
+
+## สร้าง Typeclass ขั้นตอนต่อขั้นตอน (Scala 2.13)
+
+### Step 1: ประกาศ Typeclass เป็น `trait`
+
+```scala
+// Typeclass = trait ที่มี Type Parameter
+trait Summable[A] {
+  def empty: A
+  def add(x: A, y: A): A
+}
+```
+
+---
+
+### Step 2: สร้าง Instance ด้วย `implicit val`
+
+```scala
+// Instance สำหรับ Int
+implicit val intSummable: Summable[Int] = new Summable[Int] {
+  def empty: Int               = 0
+  def add(x: Int, y: Int): Int = x + y
+}
+
+// Instance สำหรับ Double
+implicit val doubleSummable: Summable[Double] = new Summable[Double] {
+  def empty: Double                    = 0.0
+  def add(x: Double, y: Double): Double = x + y
+}
+
+// Instance สำหรับ String
+implicit val stringSummable: Summable[String] = new Summable[String] {
+  def empty: String                    = ""
+  def add(x: String, y: String): String = x + y
+}
+```
+
+> **ใส่ Instance ไว้ที่ไหน?**  
+> Scala 2.13 มีกฎการค้นหา Instance 2 ที่หลัก:
+> 1. **Companion Object ของ Typeclass** (`object Summable { implicit val ... }`)
+> 2. **Scope ปัจจุบัน** หรือ Import เข้ามา
+>
+> แนะนำให้ใส่ใน Companion Object เพราะใช้ได้เลยโดยไม่ต้อง Import พิเศษ
+
+---
+
+### Step 3: รับ Instance ด้วย `implicit` parameter
+
+```scala
+def sum[A](xs: List[A])(implicit s: Summable[A]): A =
+  xs.foldLeft(s.empty)(s.add)
+
+// ใช้งาน — Compiler หา Instance ให้อัตโนมัติ
+sum(List(1, 2, 3))                // → 6
+sum(List(1.5, 2.5, 3.0))          // → 7.0
+sum(List("Hello", " ", "World"))  // → "Hello World"
+```
+
+#### เขียนแบบ Context Bound ให้สั้นกว่า
+
+```scala
+// [A: Summable] คือ Syntactic Sugar ของ (implicit s: Summable[A])
+def sum[A: Summable](xs: List[A]): A = {
+  val s = implicitly[Summable[A]] // ดึง Instance ที่ Compiler หามาให้
+  xs.foldLeft(s.empty)(s.add)
+}
+```
+
+---
+
+> **💡 Scala 3 เปรียบเทียบ**
+>
+> Scala 3 เปลี่ยน Syntax ให้ชัดเจนขึ้น แต่แนวคิดเหมือนกันทุกอย่าง:
+>
+> | | Scala 2.13 | Scala 3 |
+> |--|-----------|---------|
+> | ประกาศ Instance | `implicit val x: T = ...` | `given x: T = ...` |
+> | รับ Instance | `(implicit x: T)` | `(using x: T)` |
+> | Context Bound | `[A: TC]` + `implicitly[TC[A]]` | `[A: TC]` + `summon[TC[A]]` |
+> | Import | `import pkg._` | `import pkg.given` |
+>
+> ```scala
+> // Scala 3
+> given intSummable: Summable[Int] with {
+>   def empty = 0
+>   def add(x: Int, y: Int) = x + y
+> }
+> def sum[A](xs: List[A])(using s: Summable[A]): A = ...
+> ```
+
+---
+
+## Implicit Class — เพิ่ม Method ให้ Type โดยไม่แก้ Class เดิม
+
+ใน Scala 2.13 ใช้ **Implicit Class** (Scala 3 ใช้ `extension`)
+
+```scala
+// เพิ่ม Method .doubled ให้กับทุก Type ที่มี Summable
+implicit class SummableOps[A](val x: A)(implicit s: Summable[A]) {
+  def doubled: A = s.add(x, x)
+}
+
+5.doubled          // 10
+3.14.doubled       // 6.28
+"Hello".doubled    // "HelloHello"
+```
+
+Pattern นี้ใน Cats เรียกว่า **Syntax** — ทำให้เรียก Method แบบ `x.show`, `x === y` ได้
+
+---
+
+## Typeclass ที่ใช้บ่อยใน Cats (Scala 2.13)
+
+### Eq — เปรียบเทียบความเท่ากันแบบ Type-safe
+
+```scala
+import cats.Eq
+import cats.syntax.eq._
+
+case class User(id: Int, name: String)
+
+implicit val userEq: Eq[User] = Eq.by(_.id)
+
+val u1 = User(1, "Alice")
+val u2 = User(1, "Alice (copy)")
+val u3 = User(2, "Bob")
+
+u1 === u2  // true  (id เหมือนกัน)
+u1 === u3  // false
+u1 =!= u3  // true
+
+// ต่างจาก == ตรงที่ Compiler บังคับว่าต้องมี Eq[User]
+// ถ้าไม่มี → Compile Error ทันที ดีกว่า Runtime Error
+```
+
+---
+
+### Show — แปลงเป็น String แบบ Type-safe
+
+```scala
+import cats.Show
+import cats.syntax.show._
+
+case class User(id: Int, name: String)
+
+implicit val showUser: Show[User] =
+  Show.show(u => s"User(${u.id}, ${u.name})")
+
+val user = User(42, "Alice")
+user.show  // "User(42, Alice)"
+// แทนที่ .toString ซึ่ง Compiler ไม่บังคับอะไร
+```
+
+---
+
+### Functor — map บน Context ใด ๆ
+
+`Functor[F[_]]` บอกว่า `F` มีความสามารถ `map` — ใช้ได้กับ `List`, `Option`, `IO` ฯลฯ
+
+```scala
+import cats.Functor
+import cats.syntax.functor._
+
+// ฟังก์ชันนี้ทำงานกับ F ใด ๆ ที่มี Functor — ไม่ต้อง hardcode List หรือ Option
+def doubleAll[F[_]: Functor](fa: F[Int]): F[Int] =
+  fa.map(_ * 2)
+
+doubleAll(List(1, 2, 3))       // List(2, 4, 6)
+doubleAll(Option(5))           // Some(10)
+doubleAll(Option.empty[Int])   // None
+```
+
+---
+
+### Monad — flatMap บน Context ใด ๆ
+
+```scala
+import cats.Monad
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+
+def pipeline[F[_]: Monad](input: F[Int]): F[String] = for {
+  n      <- input
+  doubled = n * 2
+  result <- Monad[F].pure(s"Result: $doubled")
+} yield result
+
+pipeline(Option(5))          // Some("Result: 10")
+pipeline(Option.empty[Int])  // None
+pipeline(List(1, 2, 3))      // List("Result: 2", "Result: 4", "Result: 6")
+// Code เดิมทั้งก้อน ทำงานกับ Type ต่าง ๆ โดยไม่ต้องแก้อะไรเลย
+```
+
+---
+
+## ตัวอย่างรวม — ใช้จริงใน Spark Pipeline
+
+```scala
+import cats.Show
+import cats.syntax.show._
+
+case class SparkRecord(id: Long, value: Double, label: String)
+
+// ใส่ Instance ใน Companion Object → ใช้ได้เลยโดยไม่ต้อง Import พิเศษ
+object SparkRecord {
+  implicit val showRecord: Show[SparkRecord] =
+    Show.show(r => s"[${r.id}] ${r.label}: ${r.value}")
+}
+
+// ฟังก์ชัน Generic — ต้องการแค่ Show ไม่สนว่า Type คืออะไร
+def logAll[A: Show](items: Seq[A]): Unit =
+  items.foreach(item => println(item.show))
+
+val records = Seq(
+  SparkRecord(1, 42.5, "temperature"),
+  SparkRecord(2, 98.6, "pressure"),
+  SparkRecord(3, 15.0, "humidity")
+)
+
+logAll(records)
+// [1] temperature: 42.5
+// [2] pressure: 98.6
+// [3] humidity: 15.0
+
+// เพิ่ม Type ใหม่ในอนาคต แค่เพิ่ม Show instance — ไม่ต้องแก้ logAll เลย
+```
+
+---
+
+## สรุปภาพรวม (Scala 2.13)
+
+```
+trait Summable[A]            ← ประกาศ "ใบรับรอง" ว่าต้องทำอะไรได้
+        │
+implicit val/object          ← ออก "ใบรับรอง" ให้แต่ละ Type
+        │
+(implicit ev: Summable[A])   ← ฟังก์ชันที่ต้องการใบรับรองนั้น
+  หรือ [A: Summable]          ← Syntax สั้นกว่า (Context Bound)
+        │
+implicit class Ops[A]        ← เพิ่ม Method เข้า Type (Syntax Extension)
+```
+
+---
+
+## อ่านเพิ่มเติม
+
+- [Cats Typeclasses](https://typelevel.org/cats/typeclasses.html)
+- [Scala 2 Implicit Parameters](https://docs.scala-lang.org/tour/implicit-parameters.html)
+- [Scala 3 Contextual Abstractions](https://docs.scala-lang.org/scala3/reference/contextual/) (อ่านเพิ่มถ้าสนใจ Scala 3)
 
 ## JVM คืออะไร?
 
