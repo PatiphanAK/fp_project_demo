@@ -6,7 +6,7 @@ Academic Year 2025.
 
 This project is designed to help students:
 - Understand declarative systems through YAML and Kubernetes
-- Apply functional programming ideas (immutability, composition, dataflow)
+- Apply functional programming ideas (immutability, composition, dataflow, algebraic datatype, pararell computing)
 in data pipelines
 - Learn how distributed data processing works in practice
 - Bridge the gap between theory (FP) and production systems
