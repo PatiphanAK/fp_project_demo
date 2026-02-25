@@ -62,6 +62,7 @@ graph TD
     C -->|Pure Func 1| D[Clean Data]
     C -->|Pure Func 2| E[Aggregate Data]
     D --> F[Output (S3/DB)]
+    E --> F
     style C fill:#f9f,stroke:#333,stroke-width:2px
 ```
 
