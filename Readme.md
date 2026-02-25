@@ -57,11 +57,19 @@ The system architecture is designed around the **Dataflow Graph** paradigm.
 ```mermaid
 graph TD
 
-    subgraph Route 10km
-        A1[Bronze Job]
-        A2[Silver Job]
-        A3[Gold Job]
+    subgraph Routes
+        R1[Route 10km]
+        R2[Route 25km]
+        R3[Route 1_5km]
     end
+
+    R1 --> A1
+    R2 --> A1
+    R3 --> A1
+
+    A1[Bronze Job]
+    A2[Silver Job]
+    A3[Gold Job]
 
     subgraph Bronze Execution
         B1[Driver]
