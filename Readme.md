@@ -36,10 +36,11 @@ By completing this project, students will be able to:
 | **Orchestration** | Kubernetes, K3s, Kind | Container Orchestration (Production vs. Local) |
 | **Workflow** | Argo Workflows | Declarative Job Scheduling & DAG Management |
 | **Compute** | Apache Spark, Hadoop | Distributed Data Processing Engine |
-| **Storage** | AWS S3 (or MinIO) | Object Storage for Data Lake |
+| **Storage** | AWS S3 | Object Storage for Data Lake |
 | **Container** | Docker, Containerd | Application Packaging & Isolation |
+| Storage Format | Apache Parquet | Columnar immutable data format optimized for analytics |
 
-### Infrastructure Notes | หมายเหตุโครงสร้างพื้นฐาน
+### Infrastructure Notes | โน๊ตสำหรับโครงสร้างพื้นฐาน
 *   **Production/Cluster:** ใช้ **Kubernetes** หรือ **K3s** สำหรับ Lightweight cluster
 *   **Local Development:** ใช้ **Kind (Kubernetes in Docker)** เพื่อความรวดเร็ว ไม่ต้องพึ่งพา VM ของ Cloud Provider
 
@@ -55,6 +56,7 @@ The system architecture is designed around the **Dataflow Graph** paradigm.
 *   **Declarative Pipelines:** กำหนด "สิ่งที่ต้องการ" (What) แทน "วิธีการทำ" (How) ใน Workflow
 
 ```mermaid
+
 graph TD
 
     subgraph Routes
