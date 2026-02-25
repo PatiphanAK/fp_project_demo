@@ -34,11 +34,14 @@ By completing this project, students will be able to:
 | Category | Tools | Description |
 | :--- | :--- | :--- |
 | **Orchestration** | Kubernetes, K3s, Kind | Container Orchestration (Production vs. Local) |
-| **Workflow** | Argo Workflows | Declarative Job Scheduling & DAG Management |
-| **Compute** | Apache Spark, Hadoop | Distributed Data Processing Engine |
-| **Storage** | AWS S3 | Object Storage for Data Lake |
-| **Container** | Docker, Containerd | Application Packaging & Isolation |
-| Storage Format | Apache Parquet | Columnar immutable data format optimized for analytics |
+| **Workflow** | Argo Workflows | Declarative DAG-based job scheduling |
+| **Compute Engine** | Apache Spark 4.x | Distributed data processing engine |
+| **Spark Runtime** | Spark Operator | Kubernetes-native Spark application controller |
+| **FP Runtime** | Cats Effect 3 | Explicit effect modeling & referential transparency |
+| **Language** | Scala 2.13 | Functional-first JVM language |
+| **Storage** | AWS S3 | Object storage for data lake |
+| **Storage Format** | Apache Parquet | Columnar immutable analytical format |
+| **Container** | Docker, Containerd | Application packaging & isolation |
 
 ### Infrastructure Notes | โน๊ตสำหรับโครงสร้างพื้นฐาน
 *   **Production/Cluster:** ใช้ **Kubernetes** หรือ **K3s** สำหรับ Lightweight cluster
