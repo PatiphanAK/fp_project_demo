@@ -17,7 +17,6 @@ This repository serves as a comprehensive demo project for students in the **Fun
 ## 🎯 Learning Objectives
 
 By completing this project, students will be able to:
-เมื่อดำเนินโครงการเสร็จสิ้น นักศึกษาจะสามารถ:
 
 1.  **Model Data Pipelines as Functional Transformations**  
     ออกแบบท่อส่งข้อมูลโดยมองว่าเป็นการแปลงค่า (Transformations) ทางฟังก์ชัน
