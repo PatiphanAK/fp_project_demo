@@ -57,13 +57,29 @@ The system architecture is designed around the **Dataflow Graph** paradigm.
 
 ```mermaid
 graph TD
-    A[Data Source (S3)] --> B(Ingestion Job)
-    B --> C{Transformation DAG}
-    C -->|Pure Func 1| D[Clean Data]
-    C -->|Pure Func 2| E[Aggregate Data]
-    D --> F[Output (S3/DB)]
-    E --> F
-    style C fill:#f9f,stroke:#333,stroke-width:2px
+
+    subgraph Control Plane
+        A[Argo Workflow]
+        O[Spark Operator]
+    end
+
+    subgraph Spark
+        D[Driver Pod]
+        E[Executor Pods]
+    end
+
+    subgraph Data Lake
+        BR[Bronze]
+        SI[Silver]
+        GO[Gold]
+    end
+
+    A --> O
+    O --> D
+    D --> E
+    E --> BR
+    BR --> SI
+    SI --> GO
 ```
 
 ## 📚 Resources & References | แหล่งเรียนรู้เพิ่มเติม
