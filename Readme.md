@@ -58,28 +58,29 @@ The system architecture is designed around the **Dataflow Graph** paradigm.
 ```mermaid
 graph TD
 
-    subgraph Control Plane
-        A[Argo Workflow]
-        O[Spark Operator]
+    subgraph Storage
+        S3[(S3 Data Lake)]
     end
 
-    subgraph Spark
-        D[Driver Pod]
-        E[Executor Pods]
+    subgraph Spark Cluster
+        D[Driver]
+        E1[Executor 1]
+        E2[Executor 2]
     end
 
-    subgraph Data Lake
-        BR[Bronze]
-        SI[Silver]
-        GO[Gold]
+    subgraph Medallion
+        B[Bronze Layer]
+        SI[Silver Layer]
+        G[Gold Layer]
     end
 
-    A --> O
-    O --> D
-    D --> E
-    E --> BR
-    BR --> SI
-    SI --> GO
+    S3 --> B
+    B --> D
+    D --> E1
+    D --> E2
+    E1 --> SI
+    E2 --> SI
+    SI --> G
 ```
 
 ## 📚 Resources & References | แหล่งเรียนรู้เพิ่มเติม
