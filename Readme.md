@@ -58,29 +58,45 @@ The system architecture is designed around the **Dataflow Graph** paradigm.
 ```mermaid
 graph TD
 
-    subgraph Storage
-        S3[(S3 Data Lake)]
+    subgraph Route 10km
+        A1[Bronze Job]
+        A2[Silver Job]
+        A3[Gold Job]
     end
 
-    subgraph Spark Cluster
-        D[Driver]
-        E1[Executor 1]
-        E2[Executor 2]
+    subgraph Bronze Execution
+        B1[Driver]
+        B2[Executor 1]
+        B3[Executor 2]
     end
 
-    subgraph Medallion
-        B[Bronze Layer]
-        SI[Silver Layer]
-        G[Gold Layer]
+    subgraph Silver Execution
+        C1[Driver]
+        C2[Executor 1]
+        C3[Executor 2]
     end
 
-    S3 --> B
-    B --> D
-    D --> E1
-    D --> E2
-    E1 --> SI
-    E2 --> SI
-    SI --> G
+    subgraph Gold Execution
+        D1[Driver]
+        D2[Executor 1]
+        D3[Executor 2]
+    end
+
+    A1 --> B1
+    B1 --> B2
+    B1 --> B3
+    B2 --> A2
+    B3 --> A2
+
+    A2 --> C1
+    C1 --> C2
+    C1 --> C3
+    C2 --> A3
+    C3 --> A3
+
+    A3 --> D1
+    D1 --> D2
+    D1 --> D3
 ```
 
 ## 📚 Resources & References | แหล่งเรียนรู้เพิ่มเติม
