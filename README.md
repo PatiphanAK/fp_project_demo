@@ -13,7 +13,7 @@
 This repository serves as a comprehensive demo project for students in the **Functional Programming** course. It bridges the gap between theoretical Functional Programming (FP) concepts and real-world **Distributed Data Processing** systems.
 
 งานนี้ถูกออกแบบมาเพื่อเชื่อมโยงแนวคิดเชิงทฤษฎีของ **Functional Programming (FP)** เข้ากับระบบ **Distributed Data Processing** ที่ใช้งานจริงในอุตสาหกรรม
-โดยที่โจทยมาจากงาน KMITL DANCHANG Trail 2025 ที่มีหลายระยะ และมีข้อมูลจากหลายแหล่งที่ ไม่สมบูรณ์ (Incomplete) และ ไม่สอดคล้องกัน (Inconsistent)
+โดยที่โจทย์มาจากงาน KMITL DANCHANG Trail 2025 ที่มีหลายระยะ และมีข้อมูลจากหลายแหล่งที่ ไม่สมบูรณ์ (Incomplete) และ ไม่สอดคล้องกัน (Inconsistent)
 
 ## 🧩 Problem Scenario | โจทย์ปัญหา
 
