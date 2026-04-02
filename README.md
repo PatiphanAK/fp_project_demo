@@ -13,9 +13,60 @@
 This repository serves as a comprehensive demo project for students in the **Functional Programming** course. It bridges the gap between theoretical Functional Programming (FP) concepts and real-world **Distributed Data Processing** systems.
 
 งานนี้ถูกออกแบบมาเพื่อเชื่อมโยงแนวคิดเชิงทฤษฎีของ **Functional Programming (FP)** เข้ากับระบบ **Distributed Data Processing** ที่ใช้งานจริงในอุตสาหกรรม
+โดยที่โจทยมาจากงาน KMITL DANCHANG Trail 2025 ที่มีหลายระยะ และมีข้อมูลจากหลายแหล่งที่ ไม่สมบูรณ์ (Incomplete) และ ไม่สอดคล้องกัน (Inconsistent)
+
+## 🧩 Problem Scenario | โจทย์ปัญหา
+
+ในงานวิ่งมีทั้งหมด **3 ระยะทาง**
+
+* 🏃 5 KM
+* 🏃 15 KM
+* 🏃 20 KM
+
+### 📥 Data Sources
+
+1. **Excel File (`excel.xlsx`)**
+
+   * ใช้เป็น **Ground Truth**
+   * มีข้อมูลผู้สมัคร + ระยะที่ลงทะเบียน
+
+2. **IoT Timing System (API)**
+
+   * เก็บข้อมูลจากการ **Scan จุดเช็คพอยต์**
+   * มีปัญหา:
+
+     * ❌ Scan ผิดระยะ (เช่น วิ่ง 10 km แต่ไป scan 25 km)
+     * ❌ ข้อมูลหาย (Missing events)
+     * ❌ Event ไม่ครบลำดับหรือลำดับผิด
+     * ❌ Scan ซ้ำๆใน checkpoint เดิม
+
+## ⚠️ Key Challenges
+
+* Data **Missing / Incomplete**
+* Data **Inconsistent across sources**
+* **Human error** from checkpoint scanning
+* Need **deterministic rule** for conflict resolution
+
+## ✅ Business Rule (Critical Logic)
+
+> 🧠 **Excel > IoT (Priority Rule)**
+
+* ใช้ Excel เป็น **Source of Truth**
+* IoT ใช้สำหรับ:
+
+  * ตรวจสอบเวลา (Timing)
+  * เติม event ที่ขาด (Enrichment)
+
+### ตัวอย่าง:
+
+| Case                    | Result                   |
+| ----------------------- | ------------------------ |
+| Excel = 5km, IoT = 15km | ✅ ใช้ 5km                |
+| Excel ไม่มี, IoT มี     | ⚠️ ใช้ IoT แบบ tentative |
+| IoT scan ผิด checkpoint | ❌ discard                |
+
 
 ## 🎯 Learning Objectives
-
 By completing this project, students will be able to:
 
 1.  **Model Data Pipelines as Functional Transformations**  
